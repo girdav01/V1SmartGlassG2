@@ -1,0 +1,43 @@
+# Copy to config.yaml (gitignored) or export matching V1SG_* env vars.
+
+vision_one:
+  # Your Trend Vision One API key (Bearer token). Generate under
+  # Administration > API Keys in the Vision One console. Scope it to at least:
+  #   - Workbench   (read)
+  #   - ASRM        (read)
+  api_key: "REPLACE_ME"
+
+  # Regional hosting of your Vision One tenant. Pick one:
+  #   us   -> api.xdr.trendmicro.com
+  #   eu   -> api.eu.xdr.trendmicro.com
+  #   jp   -> api.xdr.trendmicro.co.jp
+  #   sg   -> api.sg.xdr.trendmicro.com
+  #   au   -> api.au.xdr.trendmicro.com
+  #   in   -> api.in.xdr.trendmicro.com
+  #   uae  -> api.uae.xdr.trendmicro.com
+  region: "eu"
+
+  # Pull window (minutes) for workbench alerts on each refresh.
+  lookback_minutes: 60
+
+  # Minimum severity shown on the HUD: low | medium | high | critical
+  min_severity: "medium"
+
+glasses:
+  # BLE device name substring advertised by the G2 (e.g. "Even G2_L").
+  # Leave null to auto-pick the first G2 pair discovered.
+  device_name: null
+
+  # Per-frame HUD parameters. The G2 display is ~488x136 mono.
+  max_lines: 5
+  line_chars: 32
+
+app:
+  # Refresh cadence in seconds between API polls and HUD redraws.
+  refresh_seconds: 60
+
+  # How many top risky users/devices to include per frame.
+  top_n: 3
+
+  # dry_run=true skips BLE and prints frames to stdout.
+  dry_run: false
