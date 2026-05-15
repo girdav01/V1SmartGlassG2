@@ -30,23 +30,38 @@ machines from ASRM — all rendered on the G2 HUD.
 - Voice commands are matched with fuzzy regexes so "VisionOne" / "vision one" /
   "V1" all resolve to the same intent.
 
-### Voice today: wake-cycle (no ASR bundled)
+### Voice routing: host mic + faster-whisper
 
 The G2 hardware does the "Hey Even" wake-word detection on the temple and
-forwards the *raw LC3 mic audio* to the host — it does **not** transcribe
-on-device. The `even-glasses` package surfaces the wake event but not a
-transcript.
+forwards a START_AI event over BLE — but no transcript, and the raw mic
+audio is LC3-encoded (no Python decoder on PyPI). So we use the wake
+event as a *trigger*: the host then records ~4 s from its own microphone
+via `sounddevice` and transcribes locally with `faster-whisper`. The
+resulting text goes through the same `parse_intent` router that the
+console driver uses.
 
-This app ships a **wake-cycle** UX out of the box: each time you say
-"Hey Even …" the HUD rotates between intents (ALERTS → TOP_RISK → ALERTS).
-That's enough to get value without integrating an ASR. To get true
-per-phrase routing, swap the wake hook in `EvenG2Driver.listen_voice` for
-one that streams mic frames into a transcriber (e.g. faster-whisper) and
-feeds the transcript through the existing `parse_intent` router.
+Install the extra to enable per-phrase routing:
+
+```bash
+pip install -e ".[even,asr]"
+```
+
+That pulls `faster-whisper`, `sounddevice`, and `numpy`. On first wake
+event the Whisper model (`tiny.en` by default, ~75 MB) downloads to your
+HuggingFace cache — subsequent calls load from disk.
+
+If `[asr]` isn't installed, or `asr.enabled: false`, the driver falls back
+to a **wake-cycle** UX where each wake rotates between ALERTS and TOP_RISK
+without needing the microphone.
 
 The **console driver** (`app.dry_run: true`) accepts typed
-`Hey Even ...` strings on stdin and runs the full intent router, so you can
-develop and demo the phrase matching with no hardware.
+`Hey Even ...` strings on stdin and runs the full intent router, so you
+can develop and demo the phrase matching with no hardware and no model
+download.
+
+> **macOS tip**: grant microphone permission to your terminal under
+> System Settings → Privacy & Security → Microphone, otherwise
+> `sounddevice` returns silence.
 
 ## Voice commands
 
@@ -85,8 +100,14 @@ develop and demo the phrase matching with no hardware.
 git clone https://github.com/girdav01/v1smartglassg2.git
 cd v1smartglassg2
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[even]"   # add [test] if you want pytest etc.
+pip install -e ".[even,asr]"   # add [test] if you want pytest etc.
 ```
+
+The extras are independent:
+
+- `[even]` — community BLE SDK for the G2 (skip in dry-run / CI).
+- `[asr]` — `faster-whisper` + `sounddevice` for host-mic transcription.
+  Skip if you're happy with the wake-cycle fallback.
 
 ## Configure
 

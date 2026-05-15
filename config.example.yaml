@@ -42,3 +42,24 @@ app:
 
   # dry_run=true skips BLE and prints frames to stdout.
   dry_run: false
+
+asr:
+  # Host-mic transcription. The G2 fires the 'Hey Even' wake event over BLE,
+  # then the host records a few seconds from its own mic (sounddevice) and
+  # transcribes via faster-whisper. Requires `pip install v1smartglass[asr]`.
+  # If false (or the extra isn't installed) we fall back to a wake-cycle UX
+  # where each wake rotates between ALERTS and TOP_RISK.
+  enabled: true
+
+  # tiny.en (~75MB) is enough for short commands. base.en is more robust.
+  model: "tiny.en"
+  device: "cpu"          # cpu | cuda | auto
+  compute_type: "int8"   # int8 (fast/small), int8_float16, float16, float32
+  language: "en"
+
+  # How long to record from the host mic on each wake event.
+  record_seconds: 4.0
+  sample_rate: 16000
+
+  # sounddevice input device index/name; null = system default microphone.
+  mic_device: null

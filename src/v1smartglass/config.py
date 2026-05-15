@@ -49,10 +49,28 @@ class AppConfig(BaseModel):
     dry_run: bool = False
 
 
+class AsrConfig(BaseModel):
+    # Set to false to skip host-mic transcription and use the wake-cycle
+    # fallback (each wake rotates through intents).
+    enabled: bool = True
+    # faster-whisper model. tiny.en (~75MB) is plenty for short commands;
+    # base.en (~140MB) is more robust to background noise.
+    model: str = "tiny.en"
+    device: str = "cpu"        # "cpu" | "cuda" | "auto"
+    compute_type: str = "int8"  # int8 is fast and small on CPU
+    language: str = "en"
+    # How long to record from the host mic after each wake event.
+    record_seconds: float = Field(default=4.0, ge=1.0, le=15.0)
+    sample_rate: int = 16000
+    # sounddevice input device index/name; null = system default mic.
+    mic_device: int | str | None = None
+
+
 class Settings(BaseModel):
     vision_one: VisionOneConfig
     glasses: GlassesConfig = GlassesConfig()
     app: AppConfig = AppConfig()
+    asr: AsrConfig = AsrConfig()
 
     @field_validator("vision_one")
     @classmethod

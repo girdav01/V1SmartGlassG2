@@ -19,7 +19,8 @@ from typing import Awaitable, Callable, Protocol
 from rich.console import Console
 from rich.panel import Panel
 
-from .config import GlassesConfig
+from .asr import Transcriber
+from .config import AsrConfig, GlassesConfig
 from .formatter import Frame
 
 VoiceCallback = Callable[[str], Awaitable[None]]
@@ -75,22 +76,23 @@ class EvenG2Driver:
 
     Voice flow:
       The G2 fires a START_AI notification each time the 'Hey Even' wake word
-      is detected on the temple, then streams LC3-encoded mic audio. The
-      `even-glasses` package surfaces the wake event and the raw audio but
-      does NOT include ASR — turning audio into text is the host's job.
+      is detected on the temple. The glasses don't transcribe; they stream
+      LC3 audio for which no Python decoder exists on PyPI. So instead of
+      decoding glasses audio, we use the wake event as a *trigger*:
 
-      Since we don't bundle an ASR here, this driver implements a
-      'wake-cycle' UX: each wake event rotates between intents (ALERTS →
-      TOP_RISK → ALERTS …) and feeds a synthetic utterance to the callback.
-      To get real per-phrase routing, replace the wake hook with one that
-      streams mic data into your ASR of choice (e.g. faster-whisper) and
-      feeds the transcript through `on_utterance`.
+        - If a `Transcriber` is provided (default: faster-whisper on host
+          mic), record a few seconds from the host mic and feed the
+          transcript through `on_utterance`.
+        - If not, fall back to a 'wake-cycle' UX where each wake event
+          rotates between ALERTS and TOP_RISK and feeds a synthetic
+          utterance to the callback.
     """
 
     _CYCLE = ("Hey Even VisionOne alerts", "Hey Even Vision One top risk")
 
-    def __init__(self, cfg: GlassesConfig) -> None:
+    def __init__(self, cfg: GlassesConfig, *, transcriber: Transcriber | None = None) -> None:
         self._cfg = cfg
+        self._transcriber = transcriber
         self._glasses = None  # lazy-imported
 
     async def connect(self) -> None:
@@ -123,29 +125,37 @@ class EvenG2Driver:
     async def listen_voice(self, on_utterance: VoiceCallback) -> None:  # pragma: no cover - BLE
         if self._glasses is None:
             raise RuntimeError("connect() must be called before listen_voice().")
-        # Monkey-patch the start-AI handler so each wake event enqueues a
-        # synthetic utterance. The package's default handler still runs first.
+        # Monkey-patch the start-AI handler so each wake event signals our
+        # loop. The package's default handler still runs first.
         from even_glasses import notification_handlers as nh
+        from even_glasses.models import SubCommand
 
-        queue: asyncio.Queue[str] = asyncio.Queue()
+        wake_event = asyncio.Event()
         original = nh.handle_start_ai
 
         async def patched(glass, sender, data) -> None:  # type: ignore[no-untyped-def]
             await original(glass, sender, data)
-            await queue.put(self._next_utterance())
+            # Only act on the actual wake-word START — ignore PAGE_CONTROL etc.
+            if len(data) >= 2 and data[1] == SubCommand.START.value:
+                wake_event.set()
 
         nh.handle_start_ai = patched  # type: ignore[assignment]
         try:
             while True:
-                utterance = await queue.get()
-                await on_utterance(utterance)
+                await wake_event.wait()
+                wake_event.clear()
+                utterance = await self._utterance_for_wake()
+                if utterance:
+                    await on_utterance(utterance)
         finally:
             nh.handle_start_ai = original  # type: ignore[assignment]
 
-    def _next_utterance(self) -> str:
-        idx = getattr(self, "_cycle_idx", 0)
-        self._cycle_idx = (idx + 1) % len(self._CYCLE)
-        return self._CYCLE[idx]
+    async def _utterance_for_wake(self) -> str:
+        if self._transcriber is None:
+            idx = getattr(self, "_cycle_idx", 0)
+            self._cycle_idx = (idx + 1) % len(self._CYCLE)
+            return self._CYCLE[idx]
+        return await self._transcriber.listen_and_transcribe()
 
     async def disconnect(self) -> None:
         if self._glasses is not None:
@@ -153,11 +163,16 @@ class EvenG2Driver:
             self._glasses = None
 
 
-def build_driver(cfg: GlassesConfig, *, dry_run: bool) -> GlassesDriver:
+def build_driver(
+    cfg: GlassesConfig,
+    *,
+    dry_run: bool,
+    transcriber: Transcriber | None = None,
+) -> GlassesDriver:
     if dry_run:
         return ConsoleDriver()
     try:
         import even_glasses  # noqa: F401
     except ImportError:
         return ConsoleDriver()
-    return EvenG2Driver(cfg)
+    return EvenG2Driver(cfg, transcriber=transcriber)

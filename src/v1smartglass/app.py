@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from .asr import build_transcriber
 from .config import Settings
 from .formatter import Frame, build_frames
 from .glasses import GlassesDriver, build_driver
@@ -17,7 +18,11 @@ log = logging.getLogger(__name__)
 class App:
     def __init__(self, settings: Settings, *, driver: GlassesDriver | None = None) -> None:
         self._settings = settings
-        self._driver = driver or build_driver(settings.glasses, dry_run=settings.app.dry_run)
+        self._driver = driver or build_driver(
+            settings.glasses,
+            dry_run=settings.app.dry_run,
+            transcriber=build_transcriber(settings.asr),
+        )
         self._client = VisionOneClient(settings.vision_one)
         self._lock = asyncio.Lock()
 
