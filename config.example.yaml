@@ -24,9 +24,10 @@ vision_one:
   min_severity: "medium"
 
 glasses:
-  # BLE device name substring advertised by the G2 (e.g. "Even G2_L").
-  # Leave null to auto-pick the first G2 pair discovered.
-  device_name: null
+  # BLE names advertised by each G2 temple. Defaults work for stock G2s;
+  # override if your pair advertises differently.
+  left_name: "Even G2_L"
+  right_name: "Even G2_R"
 
   # Per-frame HUD parameters. The G2 display is ~488x136 mono.
   max_lines: 5

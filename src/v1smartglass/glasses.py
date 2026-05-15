@@ -71,7 +71,23 @@ def _read_line() -> str | None:
 
 
 class EvenG2Driver:
-    """Real driver backed by the community `even-glasses` package."""
+    """Real driver backed by the community `even-glasses` package (>=0.1.11).
+
+    Voice flow:
+      The G2 fires a START_AI notification each time the 'Hey Even' wake word
+      is detected on the temple, then streams LC3-encoded mic audio. The
+      `even-glasses` package surfaces the wake event and the raw audio but
+      does NOT include ASR — turning audio into text is the host's job.
+
+      Since we don't bundle an ASR here, this driver implements a
+      'wake-cycle' UX: each wake event rotates between intents (ALERTS →
+      TOP_RISK → ALERTS …) and feeds a synthetic utterance to the callback.
+      To get real per-phrase routing, replace the wake hook with one that
+      streams mic data into your ASR of choice (e.g. faster-whisper) and
+      feeds the transcript through `on_utterance`.
+    """
+
+    _CYCLE = ("Hey Even VisionOne alerts", "Hey Even Vision One top risk")
 
     def __init__(self, cfg: GlassesConfig) -> None:
         self._cfg = cfg
@@ -86,7 +102,10 @@ class EvenG2Driver:
                 "or set app.dry_run=true."
             ) from exc
 
-        self._glasses = GlassesManager(device_name=self._cfg.device_name)
+        self._glasses = GlassesManager(
+            left_name=self._cfg.left_name,
+            right_name=self._cfg.right_name,
+        )
         ok = await self._glasses.scan_and_connect()
         if not ok:
             raise RuntimeError("Could not pair with Even Realities G2. Make sure both arms are on.")
@@ -104,15 +123,33 @@ class EvenG2Driver:
     async def listen_voice(self, on_utterance: VoiceCallback) -> None:  # pragma: no cover - BLE
         if self._glasses is None:
             raise RuntimeError("connect() must be called before listen_voice().")
-        # even-glasses exposes voice transcripts through an async iterator on the
-        # manager. Each item is the utterance captured after the 'Hey Even' wake
-        # word is detected by the on-arm DSP.
-        async for utterance in self._glasses.voice_commands():
-            await on_utterance(str(utterance))
+        # Monkey-patch the start-AI handler so each wake event enqueues a
+        # synthetic utterance. The package's default handler still runs first.
+        from even_glasses import notification_handlers as nh
+
+        queue: asyncio.Queue[str] = asyncio.Queue()
+        original = nh.handle_start_ai
+
+        async def patched(glass, sender, data) -> None:  # type: ignore[no-untyped-def]
+            await original(glass, sender, data)
+            await queue.put(self._next_utterance())
+
+        nh.handle_start_ai = patched  # type: ignore[assignment]
+        try:
+            while True:
+                utterance = await queue.get()
+                await on_utterance(utterance)
+        finally:
+            nh.handle_start_ai = original  # type: ignore[assignment]
+
+    def _next_utterance(self) -> str:
+        idx = getattr(self, "_cycle_idx", 0)
+        self._cycle_idx = (idx + 1) % len(self._CYCLE)
+        return self._CYCLE[idx]
 
     async def disconnect(self) -> None:
         if self._glasses is not None:
-            await self._glasses.disconnect()
+            await self._glasses.disconnect_all()
             self._glasses = None
 
 

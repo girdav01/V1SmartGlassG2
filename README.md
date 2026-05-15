@@ -23,13 +23,30 @@ machines from ASRM — all rendered on the G2 HUD.
 
 - **G2 SDK**: we use the community Python BLE SDK
   [`even-glasses`](https://pypi.org/project/even-glasses/) which implements
-  Even Realities' reverse-engineered BLE protocol (pair both temples, push
-  TEXT command frames to the HUD, and subscribe to post-wake-word voice
-  transcripts).
+  Even Realities' reverse-engineered BLE protocol — scan both temples, pair,
+  push TEXT command frames to the HUD, and receive the wake-word event.
 - **Vision One v3 API**: `GET /v3.0/workbench/alerts`,
   `GET /v3.0/asrm/highRiskUsers`, `GET /v3.0/asrm/highRiskDevices`.
 - Voice commands are matched with fuzzy regexes so "VisionOne" / "vision one" /
   "V1" all resolve to the same intent.
+
+### Voice today: wake-cycle (no ASR bundled)
+
+The G2 hardware does the "Hey Even" wake-word detection on the temple and
+forwards the *raw LC3 mic audio* to the host — it does **not** transcribe
+on-device. The `even-glasses` package surfaces the wake event but not a
+transcript.
+
+This app ships a **wake-cycle** UX out of the box: each time you say
+"Hey Even …" the HUD rotates between intents (ALERTS → TOP_RISK → ALERTS).
+That's enough to get value without integrating an ASR. To get true
+per-phrase routing, swap the wake hook in `EvenG2Driver.listen_voice` for
+one that streams mic frames into a transcriber (e.g. faster-whisper) and
+feeds the transcript through the existing `parse_intent` router.
+
+The **console driver** (`app.dry_run: true`) accepts typed
+`Hey Even ...` strings on stdin and runs the full intent router, so you can
+develop and demo the phrase matching with no hardware.
 
 ## Voice commands
 

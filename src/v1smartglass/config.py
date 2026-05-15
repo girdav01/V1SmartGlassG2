@@ -35,7 +35,10 @@ class VisionOneConfig(BaseModel):
 
 
 class GlassesConfig(BaseModel):
-    device_name: str | None = None
+    # Names advertised by each G2 temple. Defaults match Even Realities' G2
+    # naming scheme; check the LightOn / Even app to find yours if they differ.
+    left_name: str = "Even G2_L"
+    right_name: str = "Even G2_R"
     max_lines: int = Field(default=5, ge=1, le=8)
     line_chars: int = Field(default=32, ge=16, le=48)
 
