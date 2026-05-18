@@ -134,6 +134,8 @@ fleet of MCP servers registered as tools. Verified servers wired in
 | MISP           | `github.com/MISP/misp-mcp`                             | Read-only event / attribute / object search |
 | Shodan         | `github.com/BurtTheCoder/mcp-shodan`                   | IP/host recon, DNS, CVE/CPE intel |
 | AbuseIPDB      | `github.com/n3r0-b1n4ry/mcp-abuseipdb`                 | IP reputation queries |
+| VirusTotal     | `github.com/BurtTheCoder/mcp-virustotal`               | URL / file / IP / domain reports with relationship pivots |
+| URLhaus        | `github.com/Cyreslab-AI/urlhaus-mcp-server`            | abuse.ch malicious-URL feed (free, no API key) |
 
 To enable, set `llm.enabled: true`, point `llm.base_url` at any
 OpenAI-compatible Chat Completions endpoint (OpenAI, a local Ollama or
@@ -142,12 +144,21 @@ LMStudio reachable over Tailscale, or a LiteLLM proxy), and flip
 the MCP `env:` blocks support `${VAR}` substitution from the process
 environment, so you don't have to commit them.
 
+Host prerequisites per server:
+
+- Vision One — `docker pull ghcr.io/trendmicro/vision-one-mcp-server`
+- Splunk / MISP / Shodan / AbuseIPDB — `uvx` (install via `pipx install uv`)
+- VirusTotal / URLhaus — `npx` (any modern Node.js)
+
 ```bash
 export V1SG_API_KEY="<vision-one-token>"
 export SHODAN_API_KEY="..."
+export VIRUSTOTAL_API_KEY="..."
+# URLhaus needs no key.
 v1smartglass run --config config.yaml
 # In one terminal you'll see each MCP server log its startup.
 # Say: "Hey Even, ask which user has the highest risk score today"
+# Or:  "Hey Even, ask is 1.2.3.4 a known malware C2"
 ```
 
 Tuning knobs (`llm:` block):

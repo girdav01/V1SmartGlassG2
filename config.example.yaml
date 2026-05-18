@@ -117,6 +117,21 @@ mcp_servers:
       ABUSEIPDB_API_KEY: "${ABUSEIPDB_API_KEY}"
     enabled: false
 
+  - name: virustotal
+    transport: stdio
+    command: npx
+    args: ["-y", "@burtthecoder/mcp-virustotal"]
+    env:
+      VIRUSTOTAL_API_KEY: "${VIRUSTOTAL_API_KEY}"
+    enabled: false
+
+  - name: urlhaus
+    transport: stdio
+    command: npx
+    args: ["-y", "urlhaus-mcp-server"]
+    # URLhaus is a public abuse.ch feed — no API key required.
+    enabled: false
+
 asr:
   # Host-mic transcription. The G2 fires the 'Hey Even' wake event over BLE,
   # then the host records a few seconds from its own mic (sounddevice) and
