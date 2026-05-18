@@ -66,11 +66,51 @@ class AsrConfig(BaseModel):
     mic_device: int | str | None = None
 
 
+class McpServerConfig(BaseModel):
+    # Friendly name (shown in logs); also used by the LLM to disambiguate tools.
+    name: str
+    # 'stdio' (subprocess) or 'http' (Streamable HTTP / SSE). stdio is the most
+    # common transport — Docker images and `uvx` scripts both speak it.
+    transport: Literal["stdio", "http"] = "stdio"
+    # stdio params
+    command: str | None = None
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    # http params
+    url: str | None = None
+    # Optional per-server tool allowlist; when set, only these tools are
+    # advertised to the LLM (smaller prompts, fewer wrong-tool calls).
+    tools: list[str] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class LlmConfig(BaseModel):
+    enabled: bool = False
+    # OpenAI-compatible Chat Completions endpoint. For Ollama via Tailscale:
+    #   http://100.x.y.z:11434/v1
+    # For LMStudio:
+    #   http://host.docker.internal:1234/v1
+    # For OpenAI:
+    #   https://api.openai.com/v1
+    base_url: str = "http://localhost:11434/v1"
+    # Any non-empty string for local servers; real key for SaaS.
+    api_key: str = "ollama"
+    model: str = "qwen2.5:14b-instruct"
+    # Hard ceiling on the rendered answer (5 HUD lines x 32 chars).
+    max_chars: int = 160
+    # Max LLM-tool iterations per ASK; keeps runaway agents bounded.
+    max_turns: int = 6
+    timeout_seconds: float = 30.0
+    system_prompt: str | None = None  # overrides built-in default
+
+
 class Settings(BaseModel):
     vision_one: VisionOneConfig
     glasses: GlassesConfig = GlassesConfig()
     app: AppConfig = AppConfig()
     asr: AsrConfig = AsrConfig()
+    llm: LlmConfig = LlmConfig()
+    mcp_servers: list[McpServerConfig] = Field(default_factory=list)
 
     @field_validator("vision_one")
     @classmethod

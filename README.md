@@ -71,12 +71,15 @@ download.
 
 ## Voice commands
 
-| Utterance                               | Intent      | What you see                                       |
-| --------------------------------------- | ----------- | -------------------------------------------------- |
-| `Hey Even, VisionOne alerts`            | `ALERTS`    | Up to 4 most severe Workbench alerts + entity name |
-| `Hey Even, Vision One top risk`         | `TOP_RISK`  | Top-N risky users + top-N risky devices (2 pages)  |
-| `Hey Even, top risky users`             | `TOP_RISK`  | Same                                               |
-| `Hey Even, alerts on Vision One`        | `ALERTS`    | Same                                               |
+| Utterance                                  | Intent      | What you see                                       |
+| ------------------------------------------ | ----------- | -------------------------------------------------- |
+| `Hey Even, VisionOne alerts`               | `ALERTS`    | Up to 4 most severe Workbench alerts + entity name |
+| `Hey Even, Vision One top risk`            | `TOP_RISK`  | Top-N risky users + top-N risky devices (2 pages)  |
+| `Hey Even, top risky users`                | `TOP_RISK`  | Same                                               |
+| `Hey Even, alerts on Vision One`           | `ALERTS`    | Same                                               |
+| `Hey Even, ask why alice@corp is risky`    | `ASK`       | LLM answer (with MCP tools) wrapped onto the HUD   |
+| `Hey Even, what is the latest critical`    | `ASK`       | Same                                               |
+| `Hey Even, tell me about 1.2.3.4`          | `ASK`       | Same                                               |
 
 ## Prerequisites
 
@@ -114,6 +117,53 @@ The extras are independent:
 - `[even]` — community BLE SDK for the G2 (skip in dry-run / CI).
 - `[asr]` — `faster-whisper` + `sounddevice` for host-mic transcription.
   Skip if you're happy with the wake-cycle fallback.
+- `[llm]` — `openai-agents` + `mcp` to answer free-form `Hey Even, ask …`
+  questions via an LLM with MCP tools. Skip if you only need the two
+  fast-path intents.
+
+### LLM + MCP setup (Hey Even, ask …)
+
+`ASK` routes the transcribed question to an OpenAI-compatible LLM that has a
+fleet of MCP servers registered as tools. Verified servers wired in
+`config.example.yaml`:
+
+| Server         | Repo                                                   | Tools |
+| -------------- | ------------------------------------------------------ | ----- |
+| Trend Vision One | `github.com/trendmicro/vision-one-mcp-server`       | Workbench, ASRM, Cloud Posture, IAM, Email/Container/Endpoint, AI Security, Threat Intel — read-only by default |
+| Splunk         | `github.com/deslicer/mcp-for-splunk`                   | NL → SPL, search execution, knowledge objects (20+ tools) |
+| MISP           | `github.com/MISP/misp-mcp`                             | Read-only event / attribute / object search |
+| Shodan         | `github.com/BurtTheCoder/mcp-shodan`                   | IP/host recon, DNS, CVE/CPE intel |
+| AbuseIPDB      | `github.com/n3r0-b1n4ry/mcp-abuseipdb`                 | IP reputation queries |
+
+To enable, set `llm.enabled: true`, point `llm.base_url` at any
+OpenAI-compatible Chat Completions endpoint (OpenAI, a local Ollama or
+LMStudio reachable over Tailscale, or a LiteLLM proxy), and flip
+`enabled: true` on each MCP server you have credentials for. Secrets in
+the MCP `env:` blocks support `${VAR}` substitution from the process
+environment, so you don't have to commit them.
+
+```bash
+export V1SG_API_KEY="<vision-one-token>"
+export SHODAN_API_KEY="..."
+v1smartglass run --config config.yaml
+# In one terminal you'll see each MCP server log its startup.
+# Say: "Hey Even, ask which user has the highest risk score today"
+```
+
+Tuning knobs (`llm:` block):
+
+- `max_chars` — hard ceiling on the answer (default 160 = 5 HUD lines × 32).
+- `max_turns` — cap on LLM-tool iterations per question (default 6).
+- `timeout_seconds` — abort if the round-trip stalls (default 30 s).
+- `system_prompt` — override the built-in HUD-aware prompt.
+
+**Latency**: local Ollama on a beefy box typically 3–6 s; cloud LLMs 8–15 s.
+The HUD shows an `ASK / thinking…` holding frame for the duration.
+
+**Blast radius**: the bundled servers are read-only or read-mostly. If you
+add a write-capable MCP later (e.g. an EDR isolate-host server), put an
+approval flow in front of it — the agents SDK supports `require_approval`
+on `MCPServerStdio`.
 
 ## Configure
 

@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 
 from v1smartglass.app import App
-from v1smartglass.config import AppConfig, GlassesConfig, Settings, VisionOneConfig
+from v1smartglass.config import AppConfig, GlassesConfig, LlmConfig, Settings, VisionOneConfig
 from v1smartglass.formatter import Frame
 from v1smartglass.vision_one import Alert, RiskEntity
 from v1smartglass.voice import Intent
@@ -75,3 +75,42 @@ async def test_handle_top_risk_returns_two_frames(settings: Settings) -> None:
     app._client = FakeClient()  # type: ignore[assignment]
     frames = await app.handle(Intent.TOP_RISK)
     assert [f.title for f in frames] == ["TOP RISKY USERS", "TOP RISKY DEVICES"]
+
+
+class FakeLlm:
+    def __init__(self, answer: str) -> None:
+        self._answer = answer
+        self.queries: list[str] = []
+
+    async def __aenter__(self) -> "FakeLlm":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None: ...
+
+    async def ask(self, query: str) -> str:
+        self.queries.append(query)
+        return self._answer
+
+
+async def test_handle_ask_uses_llm(settings: Settings) -> None:
+    settings_with_llm = settings.model_copy(update={"llm": LlmConfig(enabled=True)})
+    fake_llm = FakeLlm(answer="VisionOne: alice@corp risk=95 (suspicious login from RU).")
+
+    app = App(settings_with_llm, driver=FakeDriver())
+    app._client = FakeClient()  # type: ignore[assignment]
+    app._llm = fake_llm  # type: ignore[assignment]
+    app._pending_query = "why alice is risky"
+
+    frames = await app.handle(Intent.ASK)
+    assert fake_llm.queries == ["why alice is risky"]
+    assert frames[0].title == "ASK"
+    assert any("alice@corp" in line for line in frames[0].lines)
+
+
+async def test_handle_ask_without_llm_returns_helpful_message(settings: Settings) -> None:
+    # llm.enabled is False in the default fixture.
+    app = App(settings, driver=FakeDriver())
+    app._client = FakeClient()  # type: ignore[assignment]
+    app._pending_query = "anything"
+    frames = await app.handle(Intent.ASK)
+    assert "disabled" in frames[0].lines[0].lower()

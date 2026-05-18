@@ -15,12 +15,20 @@ import re
 class Intent(enum.Enum):
     ALERTS = "alerts"
     TOP_RISK = "top_risk"
+    ASK = "ask"
     UNKNOWN = "unknown"
 
 
 # Each intent has a list of regex patterns. We strip the wake phrase first,
-# then try each pattern in order.
+# then try each pattern in order — fast-path intents (ALERTS, TOP_RISK) take
+# precedence over ASK so the common cases skip the LLM round-trip.
 _WAKE_PHRASE = re.compile(r"^\s*(hey|hi|ok)\s+even[,\s]+", re.IGNORECASE)
+
+_ASK_PREFIX = re.compile(
+    r"^\s*(ask|tell\s+me|explain|describe|"
+    r"what|why|how|when|where|who|which|is|are|can|does|do)\b[\s,:]*",
+    re.IGNORECASE,
+)
 
 _PATTERNS: dict[Intent, list[re.Pattern[str]]] = {
     Intent.ALERTS: [
@@ -44,7 +52,22 @@ def parse_intent(utterance: str) -> Intent:
     if not utterance:
         return Intent.UNKNOWN
     stripped = _WAKE_PHRASE.sub("", utterance).strip()
+    if not stripped:
+        return Intent.UNKNOWN
     for intent, patterns in _PATTERNS.items():
         if any(p.search(stripped) for p in patterns):
             return intent
+    if _ASK_PREFIX.match(stripped):
+        return Intent.ASK
     return Intent.UNKNOWN
+
+
+def extract_ask_query(utterance: str) -> str:
+    """Return the question portion of an ASK utterance.
+
+    Strips the wake phrase and any leading 'ask'/'tell me'/'explain' prefix
+    so the LLM sees a clean question. Returns an empty string for empty
+    input. Callers should already have established Intent.ASK.
+    """
+    stripped = _WAKE_PHRASE.sub("", utterance or "").strip()
+    return _ASK_PREFIX.sub("", stripped).strip()

@@ -43,6 +43,80 @@ app:
   # dry_run=true skips BLE and prints frames to stdout.
   dry_run: false
 
+llm:
+  # Enable to answer free-form 'Hey Even, ask <question>' utterances by
+  # routing them through an LLM with the MCP servers below as tools.
+  # Requires `pip install v1smartglass[llm]`.
+  enabled: false
+
+  # OpenAI-compatible Chat Completions endpoint. Examples:
+  #   Ollama via Tailscale:   http://100.x.y.z:11434/v1
+  #   LMStudio (host):        http://host.docker.internal:1234/v1
+  #   OpenAI:                 https://api.openai.com/v1
+  base_url: "http://localhost:11434/v1"
+  api_key: "ollama"        # any non-empty string for local servers
+  model: "qwen2.5:14b-instruct"
+
+  max_chars: 160           # 5 HUD lines * 32 chars
+  max_turns: 6             # cap LLM/tool iterations per question
+  timeout_seconds: 30.0
+
+mcp_servers:
+  # Each server is started once at app launch and registered as a tool set
+  # on the agent. Use `${VAR}` to pull secrets from process env vars.
+  # Remove any block you don't need; all are optional.
+
+  - name: vision_one
+    transport: stdio
+    command: docker
+    args:
+      - "run"
+      - "-i"
+      - "--rm"
+      - "-e"
+      - "TREND_VISION_ONE_API_KEY"
+      - "ghcr.io/trendmicro/vision-one-mcp-server"
+      - "-region"
+      - "eu"
+    env:
+      TREND_VISION_ONE_API_KEY: "${V1SG_API_KEY}"
+
+  - name: splunk
+    transport: stdio
+    command: uvx
+    args: ["--from", "git+https://github.com/deslicer/mcp-for-splunk", "mcp-for-splunk"]
+    env:
+      SPLUNK_HOST: "${SPLUNK_HOST}"
+      SPLUNK_PORT: "8089"
+      SPLUNK_USERNAME: "${SPLUNK_USERNAME}"
+      SPLUNK_PASSWORD: "${SPLUNK_PASSWORD}"
+    enabled: false
+
+  - name: misp
+    transport: stdio
+    command: uvx
+    args: ["--from", "git+https://github.com/MISP/misp-mcp", "misp-mcp"]
+    env:
+      MISP_URL: "${MISP_URL}"
+      MISP_API_KEY: "${MISP_API_KEY}"
+    enabled: false
+
+  - name: shodan
+    transport: stdio
+    command: uvx
+    args: ["--from", "git+https://github.com/BurtTheCoder/mcp-shodan", "mcp-shodan"]
+    env:
+      SHODAN_API_KEY: "${SHODAN_API_KEY}"
+    enabled: false
+
+  - name: abuseipdb
+    transport: stdio
+    command: uvx
+    args: ["--from", "git+https://github.com/n3r0-b1n4ry/mcp-abuseipdb", "mcp-abuseipdb"]
+    env:
+      ABUSEIPDB_API_KEY: "${ABUSEIPDB_API_KEY}"
+    enabled: false
+
 asr:
   # Host-mic transcription. The G2 fires the 'Hey Even' wake event over BLE,
   # then the host records a few seconds from its own mic (sounddevice) and

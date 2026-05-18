@@ -11,7 +11,7 @@ import typer
 from . import config as cfg_mod
 from .app import App
 from .vision_one import VisionOneClient
-from .voice import Intent, parse_intent
+from .voice import Intent, extract_ask_query, parse_intent
 
 app = typer.Typer(add_completion=False, help="Vision One → Even Realities G2 HUD.")
 
@@ -38,7 +38,8 @@ def once(
     if intent is Intent.UNKNOWN:
         typer.secho(f"Could not parse intent from: {utterance!r}", fg=typer.colors.RED)
         raise typer.Exit(2)
-    asyncio.run(App(settings).run_once(intent))
+    query = extract_ask_query(utterance) if intent is Intent.ASK else ""
+    asyncio.run(App(settings).run_once(intent, query=query))
 
 
 @app.command()

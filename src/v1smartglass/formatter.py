@@ -71,3 +71,40 @@ def _risk_frame(title: str, entities: list[RiskEntity], glasses: GlassesConfig, 
 
 def _truncate(text: str, width: int) -> str:
     return text if len(text) <= width else text[: width - 1] + "…"
+
+
+def answer_frame(text: str, glasses: GlassesConfig, *, title: str = "ASK") -> Frame:
+    """Word-wrap free-form text into the HUD budget.
+
+    Used for LLM answers: collapses whitespace, soft-wraps on spaces, then
+    hard-truncates the final line with an ellipsis if the response still
+    overflows the available lines.
+    """
+    body_lines = glasses.max_lines - 1
+    flat = " ".join(text.split())
+    if not flat:
+        return Frame(title=title, lines=[""] * body_lines)
+
+    lines: list[str] = []
+    remaining = flat
+    while remaining and len(lines) < body_lines:
+        if len(remaining) <= glasses.line_chars:
+            lines.append(remaining)
+            remaining = ""
+            break
+        # soft-wrap on the last space within line_chars
+        cut = remaining.rfind(" ", 0, glasses.line_chars + 1)
+        if cut <= 0:
+            cut = glasses.line_chars
+        lines.append(remaining[:cut].rstrip())
+        remaining = remaining[cut:].lstrip()
+
+    if remaining and lines:
+        # text outstripped the line budget — tail-ellipsise the last line
+        tail = lines[-1]
+        budget = glasses.line_chars - 1
+        lines[-1] = (tail[:budget].rstrip() + "…") if len(tail) >= budget else tail + "…"
+
+    while len(lines) < body_lines:
+        lines.append("")
+    return Frame(title=_truncate(title, glasses.line_chars), lines=lines)
