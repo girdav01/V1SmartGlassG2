@@ -104,6 +104,28 @@ class LlmConfig(BaseModel):
     system_prompt: str | None = None  # overrides built-in default
 
 
+class NewsConfig(BaseModel):
+    enabled: bool = False
+    # How long to keep a fetched feed in memory before re-pulling.
+    cache_ttl_seconds: int = Field(default=600, ge=30, le=86400)
+    # Max items per source rendered on the HUD.
+    top_n: int = Field(default=5, ge=1, le=20)
+    # If true and llm.enabled, each item is summarised by the LLM before
+    # rendering. Falls back to the feed's own description if false or if
+    # the LLM is unavailable.
+    summarize: bool = True
+    # Per-fetch timeout for any one feed URL.
+    fetch_timeout_seconds: float = 10.0
+    # Headline + summary character budgets when feeding to the LLM.
+    headline_max_chars: int = 64
+    summary_max_chars: int = 96
+    # RSS feed URLs grouped by source. Each list maps to a voice intent:
+    #   security    -> "Hey Even, security news"
+    #   hacker_news -> "Hey Even, hacker news"
+    #   medium      -> "Hey Even, my medium"
+    sources: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class Settings(BaseModel):
     vision_one: VisionOneConfig
     glasses: GlassesConfig = GlassesConfig()
@@ -111,6 +133,7 @@ class Settings(BaseModel):
     asr: AsrConfig = AsrConfig()
     llm: LlmConfig = LlmConfig()
     mcp_servers: list[McpServerConfig] = Field(default_factory=list)
+    news: NewsConfig = NewsConfig()
 
     @field_validator("vision_one")
     @classmethod

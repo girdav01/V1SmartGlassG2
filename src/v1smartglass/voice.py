@@ -16,7 +16,13 @@ class Intent(enum.Enum):
     ALERTS = "alerts"
     TOP_RISK = "top_risk"
     ASK = "ask"
+    NEWS_HACKER = "news_hacker"
+    NEWS_SECURITY = "news_security"
+    NEWS_MEDIUM = "news_medium"
     UNKNOWN = "unknown"
+
+
+NEWS_INTENTS = {Intent.NEWS_HACKER, Intent.NEWS_SECURITY, Intent.NEWS_MEDIUM}
 
 
 # Each intent has a list of regex patterns. We strip the wake phrase first,
@@ -40,6 +46,25 @@ _PATTERNS: dict[Intent, list[re.Pattern[str]]] = {
         re.compile(r"\bvision[\s-]?one\b.*\btop\s+risk", re.IGNORECASE),
         re.compile(r"\btop\s+risk(y)?\b", re.IGNORECASE),
         re.compile(r"\brisky\s+(users?|devices?|machines?)\b", re.IGNORECASE),
+    ],
+    # Hacker News matched before security/cyber so "hacker news" doesn't get
+    # swallowed by a looser pattern. 'hn' alone is ambiguous in noisy ASR, so
+    # require a separator word ('top', 'latest') or the standalone phrase.
+    Intent.NEWS_HACKER: [
+        re.compile(r"\bhacker\s+news\b", re.IGNORECASE),
+        re.compile(r"\b(top|latest)\s+hn\b", re.IGNORECASE),
+        re.compile(r"\bhn\s+(top|stories|headlines)\b", re.IGNORECASE),
+    ],
+    Intent.NEWS_SECURITY: [
+        re.compile(r"\bcyber(security)?\s+news\b", re.IGNORECASE),
+        re.compile(r"\bsecurity\s+news\b", re.IGNORECASE),
+        re.compile(r"\binfosec\s+news\b", re.IGNORECASE),
+        re.compile(r"\bthreat\s+(intel|news)\b", re.IGNORECASE),
+    ],
+    Intent.NEWS_MEDIUM: [
+        re.compile(r"\bmedium\s+(articles?|news|feed|daily)\b", re.IGNORECASE),
+        re.compile(r"\bmy\s+medium\b", re.IGNORECASE),
+        re.compile(r"\bdaily\s+medium\b", re.IGNORECASE),
     ],
 }
 

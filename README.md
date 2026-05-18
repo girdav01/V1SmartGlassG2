@@ -80,6 +80,9 @@ download.
 | `Hey Even, ask why alice@corp is risky`    | `ASK`       | LLM answer (with MCP tools) wrapped onto the HUD   |
 | `Hey Even, what is the latest critical`    | `ASK`       | Same                                               |
 | `Hey Even, tell me about 1.2.3.4`          | `ASK`       | Same                                               |
+| `Hey Even, hacker news`                    | `NEWS_HACKER`   | HN digest (top 3) + per-story cards with AI summary |
+| `Hey Even, security news`                  | `NEWS_SECURITY` | Aggregated cybersec RSS digest + per-item cards     |
+| `Hey Even, my Medium`                      | `NEWS_MEDIUM`   | Your Medium feed: digest + per-article cards        |
 
 ## Prerequisites
 
@@ -120,6 +123,10 @@ The extras are independent:
 - `[llm]` — `openai-agents` + `mcp` to answer free-form `Hey Even, ask …`
   questions via an LLM with MCP tools. Skip if you only need the two
   fast-path intents.
+- `[news]` — `feedparser` for the cybersecurity / Hacker News / Medium
+  feed reader. If `[llm]` is also installed and `news.summarize: true`,
+  each headline gets a 1-line AI summary; otherwise the feed's own
+  description is shown.
 
 ### LLM + MCP setup (Hey Even, ask …)
 
@@ -175,6 +182,32 @@ The HUD shows an `ASK / thinking…` holding frame for the duration.
 add a write-capable MCP later (e.g. an EDR isolate-host server), put an
 approval flow in front of it — the agents SDK supports `require_approval`
 on `MCPServerStdio`.
+
+### Cybersecurity news reader
+
+Three voice intents pull RSS/Atom feeds and render them on the G2 as a
+**digest frame** (top-3 headlines, one per line) followed by **per-article
+detail cards** (wrapped title + 1-line AI summary). Cards auto-page on the
+G2; tilt your head to advance.
+
+Configure feeds under `news.sources.{security,hacker_news,medium}` in
+`config.yaml`. Defaults wired in `config.example.yaml` are Krebs,
+BleepingComputer, The Hacker News, Dark Reading, the official HN RSS, and
+a Medium template. Add or remove URLs freely — anything `feedparser` can
+parse (RSS 1/2, Atom) works.
+
+The summariser uses the same OpenAI-compatible endpoint as ASK, but
+bypasses the MCP tool loop (single chat completion per headline, ≤80
+output tokens). With `news.summarize: true` on a 14B local model expect
+~0.5-1s per headline × `top_n`. Without an LLM, falls back to the feed's
+own description trimmed to `summary_max_chars`.
+
+A 10-minute TTL cache prevents re-fetching when you say "hacker news"
+three times in five minutes. Tune via `news.cache_ttl_seconds`.
+
+Email ingestion (IMAP / Gmail OAuth) is intentionally out of scope for v1
+— add a small parallel "inbox" service that emits Articles into the same
+pipeline if you want it.
 
 ## Configure
 

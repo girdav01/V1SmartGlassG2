@@ -114,3 +114,54 @@ async def test_handle_ask_without_llm_returns_helpful_message(settings: Settings
     app._pending_query = "anything"
     frames = await app.handle(Intent.ASK)
     assert "disabled" in frames[0].lines[0].lower()
+
+
+class FakeNews:
+    """Stand-in for NewsService that returns canned articles."""
+
+    def __init__(self, articles: list) -> None:
+        self._articles = articles
+        self.calls: list[str] = []
+
+    async def __aenter__(self) -> "FakeNews":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None: ...
+
+    async def fetch(self, source: str) -> list:
+        self.calls.append(source)
+        return self._articles
+
+
+async def test_handle_news_hacker(settings: Settings) -> None:
+    from datetime import datetime, timezone
+
+    from v1smartglass.news import Article
+
+    canned = [
+        Article(
+            title=f"Item {i}",
+            link="https://x",
+            source="HN",
+            published_at=datetime.now(timezone.utc),
+            raw_summary="",
+            summary=f"summary {i}",
+        )
+        for i in range(3)
+    ]
+    app = App(settings, driver=FakeDriver())
+    app._client = FakeClient()  # type: ignore[assignment]
+    app._news = FakeNews(canned)  # type: ignore[assignment]
+
+    frames = await app.handle(Intent.NEWS_HACKER)
+    assert app._news.calls == ["hacker_news"]
+    assert frames[0].title == "HACKER NEWS"
+    # 1 digest + 3 detail frames
+    assert len(frames) == 4
+
+
+async def test_handle_news_without_service_says_disabled(settings: Settings) -> None:
+    app = App(settings, driver=FakeDriver())
+    app._client = FakeClient()  # type: ignore[assignment]
+    frames = await app.handle(Intent.NEWS_MEDIUM)
+    assert "disabled" in frames[0].lines[0].lower()

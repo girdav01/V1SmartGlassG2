@@ -132,6 +132,36 @@ mcp_servers:
     # URLhaus is a public abuse.ch feed — no API key required.
     enabled: false
 
+news:
+  # 'Hey Even, hacker news' / 'security news' / 'medium articles' pull these
+  # RSS feeds. If llm.enabled and summarize: true, each headline gets a 1-line
+  # AI summary; otherwise we fall back to the feed's own description.
+  # Requires `pip install v1smartglass[news]` (adds feedparser).
+  enabled: false
+  cache_ttl_seconds: 600   # 10 min — chats don't need real-time
+  top_n: 5                 # max items per source rendered on the HUD
+  summarize: true          # use the LLM (requires llm.enabled)
+  fetch_timeout_seconds: 10.0
+  summary_max_chars: 96    # ~3 HUD lines
+
+  # Each key maps 1:1 to a voice intent:
+  #   security    -> "Hey Even, security news"
+  #   hacker_news -> "Hey Even, hacker news"
+  #   medium      -> "Hey Even, my medium"
+  sources:
+    security:
+      - "https://krebsonsecurity.com/feed/"
+      - "https://www.bleepingcomputer.com/feed/"
+      - "https://feeds.feedburner.com/TheHackersNews"
+      - "https://www.darkreading.com/rss.xml"
+    hacker_news:
+      - "https://news.ycombinator.com/rss"
+    medium:
+      # Replace @your-handle. Either URL style works:
+      #   https://medium.com/feed/@your-handle
+      #   https://your-handle.medium.com/feed
+      - "https://medium.com/feed/@your-handle"
+
 asr:
   # Host-mic transcription. The G2 fires the 'Hey Even' wake event over BLE,
   # then the host records a few seconds from its own mic (sounddevice) and

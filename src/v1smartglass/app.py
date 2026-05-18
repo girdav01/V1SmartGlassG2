@@ -7,11 +7,18 @@ import logging
 
 from .asr import build_transcriber
 from .config import Settings
-from .formatter import Frame, answer_frame, build_frames
+from .formatter import Frame, answer_frame, build_frames, news_frames
 from .glasses import GlassesDriver, build_driver
 from .llm import LlmHost
+from .news import SOURCE_HACKER, SOURCE_MEDIUM, SOURCE_SECURITY, NewsService
 from .vision_one import VisionOneClient
 from .voice import Intent, extract_ask_query, parse_intent
+
+_NEWS_INTENT_SOURCE: dict[Intent, tuple[str, str]] = {
+    Intent.NEWS_HACKER: (SOURCE_HACKER, "Hacker News"),
+    Intent.NEWS_SECURITY: (SOURCE_SECURITY, "Security"),
+    Intent.NEWS_MEDIUM: (SOURCE_MEDIUM, "Medium"),
+}
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +35,9 @@ class App:
         self._llm: LlmHost | None = (
             LlmHost(settings.llm, settings.mcp_servers) if settings.llm.enabled else None
         )
+        # NewsService is created lazily inside run() / run_once() so its
+        # async http client is bound to the running event loop.
+        self._news: NewsService | None = None
         self._lock = asyncio.Lock()
         # Holds the last utterance so handle(Intent.ASK) knows what to ask.
         self._pending_query: str = ""
@@ -37,19 +47,21 @@ class App:
         try:
             async with self._client:
                 async with _maybe(self._llm):
-                    await self._driver.display(
-                        [
-                            Frame(
-                                title="V1 SMARTGLASS",
-                                lines=[
-                                    "Say 'Hey Even VisionOne alerts',",
-                                    "'Hey Even top risk',",
-                                    "or 'Hey Even ask <question>'.",
-                                ],
-                            )
-                        ]
-                    )
-                    await self._driver.listen_voice(self._on_utterance)
+                    async with self._news_ctx():
+                        await self._driver.display(
+                            [
+                                Frame(
+                                    title="V1 SMARTGLASS",
+                                    lines=[
+                                        "Say 'Hey Even VisionOne alerts',",
+                                        "'Hey Even top risk',",
+                                        "'Hey Even ask <question>',",
+                                        "'Hey Even hacker news'.",
+                                    ],
+                                )
+                            ]
+                        )
+                        await self._driver.listen_voice(self._on_utterance)
         finally:
             await self._driver.disconnect()
 
@@ -60,10 +72,28 @@ class App:
         try:
             async with self._client:
                 async with _maybe(self._llm):
-                    frames = await self.handle(intent)
-                    await self._driver.display(frames)
+                    async with self._news_ctx():
+                        frames = await self.handle(intent)
+                        await self._driver.display(frames)
         finally:
             await self._driver.disconnect()
+
+    def _news_ctx(self) -> "_maybe":
+        """Build (and remember) the NewsService if news is enabled."""
+        if not self._settings.news.enabled:
+            return _maybe(None)
+        # Hand the LLM's cheap summariser to NewsService when both are on.
+        summariser = None
+        if self._llm is not None and self._settings.news.summarize:
+            async def _summarise(title: str, snippet: str) -> str:
+                # _llm is checked above; keep the closure narrow.
+                assert self._llm is not None
+                return await self._llm.summarise(
+                    title, snippet, max_chars=self._settings.news.summary_max_chars
+                )
+            summariser = _summarise
+        self._news = NewsService(self._settings.news, summariser=summariser)
+        return _maybe(self._news)
 
     async def handle(self, intent: Intent) -> list[Frame]:
         """Public entry point — useful for tests and the `once` CLI command."""
@@ -79,7 +109,19 @@ class App:
             return frames[1:]  # skip the alerts frame
         if intent is Intent.ASK:
             return await self._handle_ask(self._pending_query)
+        if intent in _NEWS_INTENT_SOURCE:
+            return await self._handle_news(intent)
         return [Frame(title="V1 SMARTGLASS", lines=["Sorry, I didn't catch that."])]
+
+    async def _handle_news(self, intent: Intent) -> list[Frame]:
+        source_key, label = _NEWS_INTENT_SOURCE[intent]
+        if self._news is None:
+            return [Frame(title=label.upper(), lines=["News disabled.", "Enable news: in config."])]
+        # Show a holding frame while we fetch + summarise; on a cold cache
+        # with LLM summaries this can take several seconds.
+        await self._driver.display([Frame(title=label.upper(), lines=["loading…"])])
+        articles = await self._news.fetch(source_key)
+        return news_frames(articles, label, self._settings.glasses)
 
     async def _handle_ask(self, query: str) -> list[Frame]:
         if self._llm is None:

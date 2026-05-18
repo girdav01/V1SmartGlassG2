@@ -51,6 +51,7 @@ class LlmHost:
         self._servers_cfg = [s for s in mcp_servers if s.enabled]
         self._stack: AsyncExitStack | None = None
         self._agent: Any = None  # agents.Agent — typed loosely so tests can mock
+        self._oai_client: Any = None  # raw AsyncOpenAI for cheap one-shot calls
         self._lock = asyncio.Lock()
 
     async def __aenter__(self) -> "LlmHost":
@@ -78,6 +79,7 @@ class LlmHost:
             ) from exc
 
         client = AsyncOpenAI(api_key=self._llm.api_key, base_url=self._llm.base_url)
+        self._oai_client = client
         set_default_openai_client(client, use_for_tracing=False)
         # Chat Completions is the lowest-common-denominator API — works with
         # OpenAI, Ollama, LMStudio, vLLM, and most LiteLLM proxies. The
@@ -134,6 +136,38 @@ class LlmHost:
             await self._stack.aclose()
             self._stack = None
         self._agent = None
+        self._oai_client = None
+
+    async def summarise(self, title: str, snippet: str, *, max_chars: int = 96) -> str:
+        """Cheap one-shot summary for a news headline.
+
+        Bypasses the Agent / MCP loop entirely — this is a single chat
+        completion against the OpenAI-compatible endpoint. Used by the news
+        feed pipeline where we want lots of tiny summaries fast, not the
+        full tool-using agent.
+        """
+        if self._oai_client is None:
+            raise RuntimeError("LlmHost.start() must be called before summarise().")
+        system = (
+            "You summarise cybersecurity news for a heads-up display. "
+            f"Reply with ONE plain-text line, under {max_chars} characters, "
+            "concrete and technical. No markdown, no quotes, no preamble."
+        )
+        user = f"Headline: {title}\n\nSnippet: {snippet}".strip()
+        resp = await asyncio.wait_for(
+            self._oai_client.chat.completions.create(
+                model=self._llm.model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                temperature=0.2,
+                max_tokens=80,
+            ),
+            timeout=self._llm.timeout_seconds,
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        return _shrink(text, max_chars)
 
     async def ask(self, query: str) -> str:
         """Run one ASK round-trip and return the trimmed answer for the HUD."""
