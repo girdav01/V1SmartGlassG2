@@ -1,0 +1,20 @@
+{
+  "name": "app-v1smartglass-g2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5178",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "latest",
+    "@jappyjan/even-better-sdk": "^0.0.10",
+    "@jappyjan/even-realities-ui": "^0.0.10"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}

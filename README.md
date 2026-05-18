@@ -7,6 +7,12 @@ Say **"Hey Even, VisionOne alerts"** to see the latest critical/high Workbench
 alerts, or **"Hey Even, Vision One top risk"** to see the top risky users and
 machines from ASRM — all rendered on the G2 HUD.
 
+> **Looking for an emulator?** Check out [`even-hub/`](./even-hub/) for a
+> TypeScript port of this app that runs inside the
+> [BxNxM/even-dev](https://github.com/BxNxM/even-dev) Hub simulator (browser
+> preview, no glasses required). The Python companion below is the path for
+> direct BLE + voice on real hardware.
+
 ---
 
 ## How it works

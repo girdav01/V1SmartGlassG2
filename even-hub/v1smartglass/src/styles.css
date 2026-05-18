@@ -1,0 +1,68 @@
+@import "../node_modules/@jappyjan/even-realities-ui/dist/even-realities-ui.css";
+@import "../../_shared/styles.css";
+
+body {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.field label {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.field input,
+.field select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #2f2f2f;
+  background: #141414;
+  color: #f0f0f0;
+}
+
+.hud-preview {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #0a0a0a;
+  border: 1px solid #2f2f2f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #d6f3ff;
+  white-space: pre;
+  min-height: 110px;
+}
+
+.status-line {
+  margin: 8px 0 0;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+#event-log {
+  min-height: 100px;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 12px;
+}
+
+@media (min-width: 420px) {
+  .row {
+    grid-template-columns: 1fr 1fr;
+  }
+}

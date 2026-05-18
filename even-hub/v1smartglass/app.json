@@ -1,0 +1,26 @@
+{
+  "package_id": "com.v1smartglass.evenhub",
+  "edition": "202601",
+  "name": "V1 SmartGlass",
+  "version": "0.1.0",
+  "min_app_version": "0.1.0",
+  "tagline": "Trend Vision One alerts and top risks on Even G2.",
+  "description": "Reads the latest Workbench alerts and top risky users/devices from Trend Vision One v3 API and renders them on the G2 HUD.",
+  "author": "v1smartglass",
+  "entrypoint": "index.html",
+  "permissions": {
+    "network": [
+      "api.xdr.trendmicro.com",
+      "api.eu.xdr.trendmicro.com",
+      "api.xdr.trendmicro.co.jp",
+      "api.sg.xdr.trendmicro.com",
+      "api.au.xdr.trendmicro.com",
+      "api.in.xdr.trendmicro.com",
+      "api.uae.xdr.trendmicro.com",
+      "evenhub.evenrealities.com"
+    ],
+    "fs": [
+      "./assets"
+    ]
+  }
+}
